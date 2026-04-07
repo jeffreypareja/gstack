@@ -1924,7 +1924,13 @@ import { ALL_HOST_CONFIGS, getExternalHosts } from '../hosts/index';
 describe('Parameterized host smoke tests', () => {
   for (const hostConfig of getExternalHosts()) {
     describe(`${hostConfig.displayName} (--host ${hostConfig.name})`, () => {
-      const hostDir = path.join(ROOT, hostConfig.hostSubdir, 'skills');
+      // Flat output hosts (e.g., GitHub Copilot) write individual files to localSkillRoot.
+      // Directory-based hosts write per-skill subdirectories to hostSubdir/skills/.
+      const isFlatOutput = !!hostConfig.flatSkillOutput;
+      const suffix = hostConfig.outputFileSuffix ?? '.md';
+      const hostDir = isFlatOutput
+        ? path.join(ROOT, hostConfig.localSkillRoot)
+        : path.join(ROOT, hostConfig.hostSubdir, 'skills');
 
       test('generates output that exists on disk', () => {
         // Generated dir should exist (created by earlier bun run gen:skill-docs --host all)
@@ -1935,41 +1941,69 @@ describe('Parameterized host smoke tests', () => {
           });
         }
         expect(fs.existsSync(hostDir)).toBe(true);
-        const skills = fs.readdirSync(hostDir).filter(d =>
-          fs.existsSync(path.join(hostDir, d, 'SKILL.md'))
-        );
-        expect(skills.length).toBeGreaterThan(0);
+        if (isFlatOutput) {
+          const skills = fs.readdirSync(hostDir).filter(f => f.endsWith(suffix));
+          expect(skills.length).toBeGreaterThan(0);
+        } else {
+          const skills = fs.readdirSync(hostDir).filter(d =>
+            fs.existsSync(path.join(hostDir, d, 'SKILL.md'))
+          );
+          expect(skills.length).toBeGreaterThan(0);
+        }
       });
 
       test('no .claude/skills path leakage in non-root skills', () => {
         if (!fs.existsSync(hostDir)) return; // skip if not generated
-        const skills = fs.readdirSync(hostDir);
-        for (const skill of skills) {
-          // Skip root gstack skill — it contains preamble with intentional .claude/skills
-          // fallback paths for binary lookup and skill prefix instructions
-          if (skill === 'gstack') continue;
-          const skillMd = path.join(hostDir, skill, 'SKILL.md');
-          if (!fs.existsSync(skillMd)) continue;
-          const content = fs.readFileSync(skillMd, 'utf-8');
-          // Strip bash blocks (which have legitimate fallback paths)
-          const noBash = content.replace(/```bash\n[\s\S]*?```/g, '');
-          const leaks = noBash.split('\n').filter(l => l.includes('.claude/skills'));
-          if (leaks.length > 0) {
-            throw new Error(`${skill}: .claude/skills leakage:\n${leaks.slice(0, 3).join('\n')}`);
+        if (isFlatOutput) {
+          const skillFiles = fs.readdirSync(hostDir).filter(f => f.endsWith(suffix));
+          for (const file of skillFiles) {
+            if (file === `gstack${suffix}`) continue; // root skill has intentional fallback paths
+            const content = fs.readFileSync(path.join(hostDir, file), 'utf-8');
+            const noBash = content.replace(/```bash\n[\s\S]*?```/g, '');
+            const leaks = noBash.split('\n').filter(l => l.includes('.claude/skills'));
+            if (leaks.length > 0) {
+              throw new Error(`${file}: .claude/skills leakage:\n${leaks.slice(0, 3).join('\n')}`);
+            }
+          }
+        } else {
+          const skills = fs.readdirSync(hostDir);
+          for (const skill of skills) {
+            // Skip root gstack skill — it contains preamble with intentional .claude/skills
+            // fallback paths for binary lookup and skill prefix instructions
+            if (skill === 'gstack') continue;
+            const skillMd = path.join(hostDir, skill, 'SKILL.md');
+            if (!fs.existsSync(skillMd)) continue;
+            const content = fs.readFileSync(skillMd, 'utf-8');
+            // Strip bash blocks (which have legitimate fallback paths)
+            const noBash = content.replace(/```bash\n[\s\S]*?```/g, '');
+            const leaks = noBash.split('\n').filter(l => l.includes('.claude/skills'));
+            if (leaks.length > 0) {
+              throw new Error(`${skill}: .claude/skills leakage:\n${leaks.slice(0, 3).join('\n')}`);
+            }
           }
         }
       });
 
       test('frontmatter has name and description', () => {
         if (!fs.existsSync(hostDir)) return;
-        const skills = fs.readdirSync(hostDir);
-        for (const skill of skills) {
-          const skillMd = path.join(hostDir, skill, 'SKILL.md');
-          if (!fs.existsSync(skillMd)) continue;
-          const content = fs.readFileSync(skillMd, 'utf-8');
-          expect(content).toMatch(/^---\n/);
-          expect(content).toMatch(/^name:\s/m);
-          expect(content).toMatch(/^description:\s/m);
+        if (isFlatOutput) {
+          const skillFiles = fs.readdirSync(hostDir).filter(f => f.endsWith(suffix));
+          for (const file of skillFiles) {
+            const content = fs.readFileSync(path.join(hostDir, file), 'utf-8');
+            expect(content).toMatch(/^---\n/);
+            expect(content).toMatch(/^name:\s/m);
+            expect(content).toMatch(/^description:\s/m);
+          }
+        } else {
+          const skills = fs.readdirSync(hostDir);
+          for (const skill of skills) {
+            const skillMd = path.join(hostDir, skill, 'SKILL.md');
+            if (!fs.existsSync(skillMd)) continue;
+            const content = fs.readFileSync(skillMd, 'utf-8');
+            expect(content).toMatch(/^---\n/);
+            expect(content).toMatch(/^name:\s/m);
+            expect(content).toMatch(/^description:\s/m);
+          }
         }
       });
 
@@ -1985,7 +2019,11 @@ describe('Parameterized host smoke tests', () => {
 
       if (hostConfig.generation.skipSkills?.includes('codex')) {
         test('/codex skill excluded', () => {
-          expect(fs.existsSync(path.join(hostDir, 'gstack-codex', 'SKILL.md'))).toBe(false);
+          if (isFlatOutput) {
+            expect(fs.existsSync(path.join(hostDir, `gstack-codex${suffix}`))).toBe(false);
+          } else {
+            expect(fs.existsSync(path.join(hostDir, 'gstack-codex', 'SKILL.md'))).toBe(false);
+          }
         });
       }
     });
@@ -2004,7 +2042,12 @@ describe('--host all', () => {
     // All hosts should appear in output
     expect(output).toContain('FRESH: SKILL.md');           // claude
     for (const hostConfig of getExternalHosts()) {
-      expect(output).toContain(`FRESH: ${hostConfig.hostSubdir}/skills/`);
+      if (hostConfig.flatSkillOutput) {
+        // Flat output hosts emit FRESH: <localSkillRoot>/<name><suffix>
+        expect(output).toContain(`FRESH: ${hostConfig.localSkillRoot}/`);
+      } else {
+        expect(output).toContain(`FRESH: ${hostConfig.hostSubdir}/skills/`);
+      }
     }
   });
 });

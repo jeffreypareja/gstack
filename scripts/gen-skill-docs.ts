@@ -357,9 +357,18 @@ function processExternalHost(
   const hostConfig = getHostConfig(host);
 
   const name = externalSkillName(skillDir === '.' ? '' : skillDir, frontmatterName);
-  const outputDir = path.join(ROOT, hostConfig.hostSubdir, 'skills', name);
+
+  // Flat output mode: write <localSkillRoot>/<name><suffix> instead of <hostSubdir>/skills/<name>/SKILL.md
+  let outputDir: string;
+  let outputPath: string;
+  if (hostConfig.flatSkillOutput) {
+    outputDir = path.join(ROOT, hostConfig.localSkillRoot);
+    outputPath = path.join(outputDir, `${name}${hostConfig.outputFileSuffix ?? '.md'}`);
+  } else {
+    outputDir = path.join(ROOT, hostConfig.hostSubdir, 'skills', name);
+    outputPath = path.join(outputDir, 'SKILL.md');
+  }
   fs.mkdirSync(outputDir, { recursive: true });
-  const outputPath = path.join(outputDir, 'SKILL.md');
 
   // Guard against symlink loops
   let symlinkLoop = false;
@@ -622,8 +631,15 @@ The orchestrator will persist the plan link to its own memory/knowledge store.
       console.log(`Token Budget (${currentHost} host)`);
       console.log('═'.repeat(60));
       for (const t of tokenBudget) {
-        const hostSubdirs = ALL_HOST_CONFIGS.map(c => c.hostSubdir.replace('.', '\\.')).join('|');
-        const name = t.skill.replace(/\/SKILL\.md$/, '').replace(new RegExp(`^\\.(${hostSubdirs})\\/skills\\/`), '');
+        const currentHostConfig = getHostConfig(currentHost);
+        let name: string;
+        if (currentHostConfig.flatSkillOutput) {
+          const suffix = currentHostConfig.outputFileSuffix ?? '.md';
+          name = t.skill.replace(new RegExp(`^${currentHostConfig.localSkillRoot.replace('.', '\\.')}/`), '').replace(new RegExp(`${suffix.replace('.', '\\.')}$`), '');
+        } else {
+          const hostSubdirs = ALL_HOST_CONFIGS.map(c => c.hostSubdir.replace('.', '\\.')).join('|');
+          name = t.skill.replace(/\/SKILL\.md$/, '').replace(new RegExp(`^\\.(${hostSubdirs})\\/skills\\/`), '');
+        }
         console.log(`  ${name.padEnd(30)} ${String(t.lines).padStart(5)} lines  ~${String(t.tokens).padStart(6)} tokens`);
       }
       console.log('─'.repeat(60));

@@ -16,6 +16,7 @@ import {
   getExternalHosts,
   claude,
   codex,
+  copilot,
   factory,
   kiro,
   opencode,
@@ -30,8 +31,8 @@ const ROOT = path.resolve(import.meta.dir, '..');
 // ─── hosts/index.ts ─────────────────────────────────────────
 
 describe('hosts/index.ts', () => {
-  test('ALL_HOST_CONFIGS has 8 hosts', () => {
-    expect(ALL_HOST_CONFIGS.length).toBe(8);
+  test('ALL_HOST_CONFIGS has 9 hosts', () => {
+    expect(ALL_HOST_CONFIGS.length).toBe(9);
   });
 
   test('ALL_HOST_NAMES matches config names', () => {
@@ -47,6 +48,7 @@ describe('hosts/index.ts', () => {
   test('individual config re-exports match registry', () => {
     expect(claude.name).toBe('claude');
     expect(codex.name).toBe('codex');
+    expect(copilot.name).toBe('copilot');
     expect(factory.name).toBe('factory');
     expect(kiro.name).toBe('kiro');
     expect(opencode.name).toBe('opencode');
@@ -493,10 +495,28 @@ describe('host config correctness', () => {
     expect(openclaw.generation.includeSkills!.length).toBe(0);
   });
 
+  test('copilot uses flat skill output to .github/prompts/', () => {
+    expect(copilot.flatSkillOutput).toBe(true);
+    expect(copilot.outputFileSuffix).toBe('.prompt.md');
+    expect(copilot.localSkillRoot).toBe('.github/prompts');
+    expect(copilot.hostSubdir).toBe('.github/prompts');
+  });
+
+  test('copilot frontmatter injects mode: agent for VS Code', () => {
+    expect(copilot.frontmatter.mode).toBe('allowlist');
+    expect(copilot.frontmatter.extraFields).toBeDefined();
+    expect(copilot.frontmatter.extraFields!.mode).toBe('agent');
+  });
+
+  test('copilot has GitHub Copilot coAuthorTrailer', () => {
+    expect(copilot.coAuthorTrailer).toContain('GitHub Copilot');
+  });
+
   test('every host has coAuthorTrailer or undefined', () => {
-    // Claude, Codex, Factory, OpenClaw have explicit trailers
+    // Claude, Codex, Factory, OpenClaw, Copilot have explicit trailers
     expect(claude.coAuthorTrailer).toContain('Claude');
     expect(codex.coAuthorTrailer).toContain('Codex');
+    expect(copilot.coAuthorTrailer).toContain('Copilot');
     expect(factory.coAuthorTrailer).toContain('Factory');
     expect(openclaw.coAuthorTrailer).toContain('OpenClaw');
   });

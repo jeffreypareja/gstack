@@ -41,7 +41,7 @@ TEAM_MODE=0
 NO_TEAM_MODE=0
 while [ $# -gt 0 ]; do
   case "$1" in
-    --host) [ -z "$2" ] && echo "Missing value for --host (expected claude, codex, kiro, or auto)" >&2 && exit 1; HOST="$2"; shift 2 ;;
+    --host) [ -z "$2" ] && echo "Missing value for --host (expected claude, codex, kiro, copilot, or auto)" >&2 && exit 1; HOST="$2"; shift 2 ;;
     --host=*) HOST="${1#--host=}"; shift ;;
     --local) LOCAL_INSTALL=1; shift ;;
     --prefix)    SKILL_PREFIX=1; SKILL_PREFIX_FLAG=1; shift ;;
@@ -54,7 +54,7 @@ while [ $# -gt 0 ]; do
 done
 
 case "$HOST" in
-  claude|codex|kiro|factory|auto) ;;
+  claude|codex|kiro|factory|copilot|auto) ;;
   openclaw)
     echo ""
     echo "OpenClaw integration uses a different model — OpenClaw spawns Claude Code"
@@ -67,7 +67,7 @@ case "$HOST" in
     echo "  3. See docs/OPENCLAW.md for the full architecture"
     echo ""
     exit 0 ;;
-  *) echo "Unknown --host value: $HOST (expected claude, codex, kiro, factory, openclaw, or auto)" >&2; exit 1 ;;
+  *) echo "Unknown --host value: $HOST (expected claude, codex, kiro, factory, copilot, openclaw, or auto)" >&2; exit 1 ;;
 esac
 
 # ─── Resolve skill prefix preference ─────────────────────────
@@ -130,6 +130,7 @@ INSTALL_CLAUDE=0
 INSTALL_CODEX=0
 INSTALL_KIRO=0
 INSTALL_FACTORY=0
+INSTALL_COPILOT=0
 if [ "$HOST" = "auto" ]; then
   command -v claude >/dev/null 2>&1 && INSTALL_CLAUDE=1
   command -v codex >/dev/null 2>&1 && INSTALL_CODEX=1
@@ -147,6 +148,8 @@ elif [ "$HOST" = "kiro" ]; then
   INSTALL_KIRO=1
 elif [ "$HOST" = "factory" ]; then
   INSTALL_FACTORY=1
+elif [ "$HOST" = "copilot" ]; then
+  INSTALL_COPILOT=1
 fi
 
 migrate_direct_codex_install() {
@@ -762,6 +765,27 @@ if [ "$INSTALL_FACTORY" -eq 1 ]; then
   echo "gstack ready (factory)."
   echo "  browse: $BROWSE_BIN"
   echo "  factory skills: $FACTORY_SKILLS"
+fi
+
+# 6c. Install for GitHub Copilot (VS Code)
+# Copilot prompts are project-local — generate .github/prompts/*.prompt.md
+# in the current working directory (or the gstack source dir).
+if [ "$INSTALL_COPILOT" -eq 1 ]; then
+  COPILOT_PROMPTS_DIR="$(pwd)/.github/prompts"
+  log "Generating .github/prompts/ skill docs for GitHub Copilot..."
+  (
+    cd "$SOURCE_GSTACK_DIR"
+    bun install --frozen-lockfile 2>/dev/null || bun install
+    bun run gen:skill-docs --host copilot
+  )
+  log ""
+  log "gstack ready (copilot)."
+  log "  prompts: $COPILOT_PROMPTS_DIR"
+  log ""
+  log "Next steps:"
+  log "  1. Copy .github/prompts/ to your project repository"
+  log "  2. Open VS Code with GitHub Copilot and use @workspace /<skill-name>"
+  log ""
 fi
 
 # 7. Create .agents/ sidecar symlinks for the real Codex skill target.

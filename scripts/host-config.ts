@@ -109,6 +109,16 @@ export interface HostConfig {
   staticFiles?: Record<string, string>;
   /** Optional path to host-adapter module for complex transformations. */
   adapter?: string;
+
+  // --- Flat Skill Output ---
+  /**
+   * When true, each skill is written as a single flat file to `localSkillRoot` instead of
+   * per-skill subdirectory `<hostSubdir>/skills/<name>/SKILL.md`.
+   * Used by hosts like GitHub Copilot that need `<localSkillRoot>/<name><outputFileSuffix>`.
+   */
+  flatSkillOutput?: boolean;
+  /** File suffix for flat output mode (e.g., '.prompt.md'). Defaults to '.md'. */
+  outputFileSuffix?: string;
 }
 
 // --- Validation ---
