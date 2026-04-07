@@ -161,6 +161,34 @@ Key fields:
 | `coAuthorTrailer` | Git co-author string for commits |
 | `boundaryInstruction` | Anti-prompt-injection warning for cross-model invocations |
 | `adapter` | Path to adapter module for complex transformations |
+| `flatSkillOutput` | `true` = write flat files to `localSkillRoot` (e.g., VS Code Copilot) |
+| `outputFileSuffix` | File suffix for flat output (e.g., `.prompt.md`). Required when `flatSkillOutput: true`. |
+
+## Flat skill output (for hosts like VS Code Copilot)
+
+By default, the generator creates per-skill subdirectories:
+`<hostSubdir>/skills/<name>/SKILL.md`.
+
+Some hosts expect flat files instead. For example, VS Code Copilot reads
+`.prompt.md` files directly from `.github/prompts/`:
+`.github/prompts/<name>.prompt.md`.
+
+To enable flat output, set these fields in your config:
+
+```typescript
+flatSkillOutput: true,
+outputFileSuffix: '.prompt.md',  // required for flat output
+localSkillRoot: '.github/prompts',
+hostSubdir: '.github/prompts',   // used for gitignore + skill-check
+```
+
+With flat output:
+- Each skill writes to `<localSkillRoot>/<name><outputFileSuffix>`
+- `skill:check` scans `<localSkillRoot>/` for `*<suffix>` files
+- `--dry-run` reports `FRESH: <localSkillRoot>/<name><suffix>`
+- The parameterized smoke tests auto-adapt for flat output hosts
+
+See `hosts/copilot.ts` for a complete example.
 
 ## Adapter pattern (for hosts with different tool models)
 

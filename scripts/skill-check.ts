@@ -84,33 +84,59 @@ for (const file of SKILL_FILES) {
 import { getExternalHosts } from '../hosts/index';
 
 for (const hostConfig of getExternalHosts()) {
-  const hostDir = path.join(ROOT, hostConfig.hostSubdir, 'skills');
-  if (fs.existsSync(hostDir)) {
-    console.log(`\n  ${hostConfig.displayName} Skills (${hostConfig.hostSubdir}/skills/):`);
-    const dirs = fs.readdirSync(hostDir).sort();
-    let count = 0;
-    let missing = 0;
-    for (const dir of dirs) {
-      const skillMd = path.join(hostDir, dir, 'SKILL.md');
-      if (fs.existsSync(skillMd)) {
+  if (hostConfig.flatSkillOutput) {
+    // Flat output: skills are individual files like <localSkillRoot>/<name><suffix>
+    const promptDir = path.join(ROOT, hostConfig.localSkillRoot);
+    const suffix = hostConfig.outputFileSuffix ?? '.md';
+    if (fs.existsSync(promptDir)) {
+      console.log(`\n  ${hostConfig.displayName} Skills (${hostConfig.localSkillRoot}/):`);
+      const files = fs.readdirSync(promptDir).filter(f => f.endsWith(suffix)).sort();
+      let count = 0;
+      for (const file of files) {
+        const filePath = path.join(promptDir, file);
         count++;
-        const content = fs.readFileSync(skillMd, 'utf-8');
+        const content = fs.readFileSync(filePath, 'utf-8');
         const hasClaude = content.includes('.claude/skills');
         if (hasClaude) {
           hasErrors = true;
-          console.log(`  \u274c ${dir.padEnd(30)} — contains .claude/skills reference`);
+          console.log(`  ❌ ${file.padEnd(30)} — contains .claude/skills reference`);
         } else {
-          console.log(`  \u2705 ${dir.padEnd(30)} — OK`);
+          console.log(`  ✅ ${file.padEnd(30)} — OK`);
         }
-      } else {
-        missing++;
-        hasErrors = true;
-        console.log(`  \u274c ${dir.padEnd(30)} — SKILL.md missing`);
       }
+      console.log(`  Total: ${count} skills`);
+    } else {
+      console.log(`\n  ${hostConfig.displayName} Skills: ${hostConfig.localSkillRoot}/ not found (run: bun run gen:skill-docs --host ${hostConfig.name})`);
     }
-    console.log(`  Total: ${count} skills, ${missing} missing`);
   } else {
-    console.log(`\n  ${hostConfig.displayName} Skills: ${hostConfig.hostSubdir}/skills/ not found (run: bun run gen:skill-docs --host ${hostConfig.name})`);
+    const hostDir = path.join(ROOT, hostConfig.hostSubdir, 'skills');
+    if (fs.existsSync(hostDir)) {
+      console.log(`\n  ${hostConfig.displayName} Skills (${hostConfig.hostSubdir}/skills/):`);
+      const dirs = fs.readdirSync(hostDir).sort();
+      let count = 0;
+      let missing = 0;
+      for (const dir of dirs) {
+        const skillMd = path.join(hostDir, dir, 'SKILL.md');
+        if (fs.existsSync(skillMd)) {
+          count++;
+          const content = fs.readFileSync(skillMd, 'utf-8');
+          const hasClaude = content.includes('.claude/skills');
+          if (hasClaude) {
+            hasErrors = true;
+            console.log(`  ❌ ${dir.padEnd(30)} — contains .claude/skills reference`);
+          } else {
+            console.log(`  ✅ ${dir.padEnd(30)} — OK`);
+          }
+        } else {
+          missing++;
+          hasErrors = true;
+          console.log(`  ❌ ${dir.padEnd(30)} — SKILL.md missing`);
+        }
+      }
+      console.log(`  Total: ${count} skills, ${missing} missing`);
+    } else {
+      console.log(`\n  ${hostConfig.displayName} Skills: ${hostConfig.hostSubdir}/skills/ not found (run: bun run gen:skill-docs --host ${hostConfig.name})`);
+    }
   }
 }
 
